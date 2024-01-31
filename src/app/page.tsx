@@ -1,34 +1,99 @@
-import { MemeTemplate, Meme } from "@/app/(data)/types";
+"use client";
+import { useEffect, useState } from 'react';
+import './style.css'
+import axios from 'axios';
 
-import { MemeEditor } from "@/app/(components)/MemeEditor";
-import { MemeDisplay } from "@/app/(components)/MemeDisplay";
+export default function Home() {
+  const [memes, setMemes] = useState([]);
+  const [after, setAfter] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [selectedMeme, setSelectedMeme] = useState(null);
 
-export default async function Home() {
-  const memeTemplatesReq = await fetch(
-    "http://localhost:3000/api/meme-templates"
-  );
-  const memeTemplates = (await memeTemplatesReq.json()) as MemeTemplate[];
+  const fetchMemes = async () => {
+    try {
+      setLoading(true);
 
-  const memesReq = await fetch("http://localhost:3000/api/memes", {
-    cache: "no-cache",
-  });
-  const memes = (await memesReq.json()) as Meme[];
+      const response = await axios.get(
+        `https://www.reddit.com/r/memes.json?&limit=20${after ? `&after=${after}` : ''}`
+      );
+
+      const newMemes = response.data.data.children.slice(1).map((post) => {
+        const postData = post.data;
+        const image = postData.url;
+        const text = postData.title;
+        const id = postData.id;
+
+        return {
+          id,
+          image,
+          text,
+        };
+      });
+
+      setMemes((prevMemes) => [...prevMemes, ...newMemes]);
+      setAfter(response.data.data.after);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching memes:', error);
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMemes();
+  }, []);
+
+  const handleScroll = () => {
+    const { scrollTop, clientHeight, scrollHeight } = document.documentElement;
+
+    if (scrollTop + clientHeight >= scrollHeight - 50 && !loading) {
+      fetchMemes();
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll);
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [loading, after]);
+
+  const openModal = (meme) => {
+    setSelectedMeme(meme);
+  };
+
+  const closeModal = () => {
+    setSelectedMeme(null);
+  };
 
   return (
     <main className="p-2 max-w-[1200px] mx-auto">
-      <MemeEditor templates={memeTemplates} />
-      <h2 className="text-3xl font-bold mt-5">Memes</h2>
-      <div className="grid sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-        {memes.map((meme) => (
-          <MemeDisplay
-            key={meme.id}
-            template={
-              memeTemplates.find((template) => template.id === meme.template)!
-            }
-            values={meme.values}
-          />
-        ))}
+    <h2 className="text-3xl font-bold mt-5 tx">Memes</h2>
+    <div className="grid sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+      {memes.map((meme, index) => (
+        <div key={index} className="meme-container" onClick={() => openModal(meme)}>
+          <img src={meme.image} alt={meme.text} className="meme-image" />
+          <p className="meme-text" style={{ color: 'black', fontSize: '16px', fontWeight: 'bold' }}>{meme.text}</p>
+        </div>
+      ))}
+    </div>
+
+    {selectedMeme && (
+      <div className="modal-overlay" onClick={closeModal} >
+        <div className="modal">
+          <img src={selectedMeme.image} alt={selectedMeme.text} className="full-resolution-image" />
+          <p className="meme-text" style={{ color: 'black', fontSize: '16px', fontWeight: 'bold', marginTop: '10px' }}>{selectedMeme.text}</p>
+        </div>
       </div>
-    </main>
-  );
+    )}
+  </main>
+    );
+    
+
 }
+{/* <div className="modal-overlay" onClick={closeModal}>
+          <div className="modal">
+            <img src={selectedMeme.image} alt={selectedMeme.text} className="full-resolution-image" />
+          </div>
+        </div> */}
